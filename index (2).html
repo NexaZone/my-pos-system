@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexaZone Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #1a1a1a; color: white; height: 100vh; display: flex; }
+        
+        .sidebar { width: 260px; background: #D64213; padding: 20px 0; display: flex; flex-direction: column; }
+        .brand { text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 40px; }
+        .nav-item { padding: 15px 25px; cursor: pointer; display: flex; gap: 10px; align-items: center; transition: 0.2s; }
+        .nav-item:hover, .nav-item.active { background: rgba(0,0,0,0.2); border-left: 4px solid white; }
+        
+        .content { flex: 1; padding: 40px; overflow-y: auto; }
+        .hidden { display: none; }
+        
+        .card { background: #2d2d2d; padding: 30px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; margin-bottom: 8px; color: #aaa; font-size: 14px; }
+        .input-group input { width: 100%; padding: 12px; background: #333; border: 1px solid #444; color: white; border-radius: 5px; outline: none; }
+        .btn-primary { width: 100%; padding: 12px; background: #D64213; color: white; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
+        
+        table { width: 100%; border-collapse: collapse; background: #2d2d2d; border-radius: 8px; overflow: hidden; margin-top: 20px; }
+        th { text-align: left; padding: 15px; background: #333; color: #aaa; }
+        td { padding: 15px; border-bottom: 1px solid #333; }
+        .status-active { color: #4ade80; } .status-expired { color: #f87171; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="brand">NexaZone Admin</div>
+        <div onclick="showPage('create')" class="nav-item active" id="nav-create"><i class="fas fa-user-plus"></i> Grant Access</div>
+        <div onclick="showPage('list')" class="nav-item" id="nav-list"><i class="fas fa-users"></i> User List</div>
+    </div>
+
+    <div class="content">
+        <section id="page-create">
+            <h2 style="margin-bottom: 20px;">Grant New Access</h2>
+            <div class="card">
+                <div class="input-group"><label>Email</label><input type="email" id="admEmail" placeholder="client@example.com"></div>
+                <div class="input-group"><label>Password</label><input type="text" id="admPass" placeholder="Password"></div>
+                <div class="input-group"><label>WhatsApp</label><input type="tel" id="admPhone" maxlength="12" placeholder="07x xxx xxxx"></div>
+                <div style="display:flex; gap:10px;">
+                    <div class="input-group" style="flex:1"><label>Start</label><input type="date" id="admStart"></div>
+                    <div class="input-group" style="flex:1"><label>End</label><input type="date" id="admEnd"></div>
+                </div>
+                <button class="btn-primary" onclick="createUser()">Create Account</button>
+            </div>
+        </section>
+
+        <section id="page-list" class="hidden">
+            <h2 style="margin-bottom: 20px;">All Users</h2>
+            <table>
+                <thead><tr><th>Email</th><th>Pass</th><th>Phone</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody id="userTable"></tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        const DB_KEY = 'nz_master_users_db';
+
+        function showPage(page) {
+            document.getElementById('page-create').classList.add('hidden');
+            document.getElementById('page-list').classList.add('hidden');
+            document.getElementById('nav-create').classList.remove('active');
+            document.getElementById('nav-list').classList.remove('active');
+            document.getElementById('page-' + page).classList.remove('hidden');
+            document.getElementById('nav-' + page).classList.add('active');
+            if(page === 'list') loadUsers();
+        }
+
+        document.getElementById('admPhone').addEventListener('input', function(e) {
+            let v = e.target.value.replace(/\D/g, '').slice(0, 10);
+            if(v.length > 6) v = v.slice(0, 3) + ' ' + v.slice(3, 6) + ' ' + v.slice(6);
+            else if(v.length > 3) v = v.slice(0, 3) + ' ' + v.slice(3);
+            e.target.value = v;
+        });
+
+        function createUser() {
+            const email = document.getElementById('admEmail').value.trim();
+            const pass = document.getElementById('admPass').value.trim();
+            const phone = document.getElementById('admPhone').value.trim();
+            const start = document.getElementById('admStart').value;
+            const end = document.getElementById('admEnd').value;
+
+            if(!email || !pass || !start || !end) { alert("Please fill all fields"); return; }
+
+            const users = JSON.parse(localStorage.getItem(DB_KEY)) || [];
+            if(users.some(u => u.email === email)) { alert("Email already exists!"); return; }
+
+            users.push({ id: Date.now(), email, pass, phone, start, end });
+            localStorage.setItem(DB_KEY, JSON.stringify(users));
+            alert("User Created!");
+            
+            document.getElementById('admEmail').value = '';
+            document.getElementById('admPass').value = '';
+            document.getElementById('admPhone').value = '';
+        }
+
+        function loadUsers() {
+            const users = JSON.parse(localStorage.getItem(DB_KEY)) || [];
+            const tbody = document.getElementById('userTable');
+            tbody.innerHTML = '';
+            const today = new Date().toISOString().split('T')[0];
+
+            users.forEach((u, i) => {
+                let status = (today >= u.start && today <= u.end) ? 'Active' : 'Expired';
+                let color = status === 'Active' ? 'status-active' : 'status-expired';
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${u.email}</td>
+                        <td>${u.pass}</td>
+                        <td>${u.phone}</td>
+                        <td class="${color}">${status}</td>
+                        <td><button onclick="deleteUser(${i})" style="color:red; background:none; border:none; cursor:pointer;">Delete</button></td>
+                    </tr>`;
+            });
+        }
+
+        function deleteUser(i) {
+            if(confirm("Delete user?")) {
+                const users = JSON.parse(localStorage.getItem(DB_KEY)) || [];
+                users.splice(i, 1);
+                localStorage.setItem(DB_KEY, JSON.stringify(users));
+                loadUsers();
+            }
+        }
+    </script>
+</body>
+</html>
